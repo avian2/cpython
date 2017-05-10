@@ -187,6 +187,28 @@ class UncompressedZipImportTestCase(ImportHooksBaseTestCase):
         files = {TESTMOD + ".py": (NOW, "")}
         self.doTest(None, files, TESTMOD)
 
+    def testBadCRC(self):
+        # check if import fails with a corrupted ZIP (CRC doesn't match)
+
+        # only test on uncompressed data for now
+        if self.compression != ZIP_STORED:
+            self.skipTest("unimplemented for compressed data")
+
+        files = {TESTMOD + ".py": (NOW, test_src)}
+        self.makeZip(files)
+
+        with open(TEMP_ZIP, "rb") as f:
+            data = f.read()
+
+        data = data.replace(b"get_name", b"xxx_name")
+
+        with open(TEMP_ZIP, "wb") as f:
+            f.write(data)
+
+        sys.path.insert(0, TEMP_ZIP)
+
+        self.assertRaises(ImportError, importlib.import_module, TESTMOD)
+
     def testBadMagic(self):
         # make pyc magic word invalid, forcing loading from .py
         badmagic_pyc = bytearray(test_pyc)
