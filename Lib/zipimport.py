@@ -464,7 +464,7 @@ _importing_zlib = False
 # Return the zlib.decompress function object, or NULL if zlib couldn't
 # be imported. The function is cached when found, so subsequent calls
 # don't import zlib again.
-def _get_decompress_func():
+def _get_zlib():
     global _importing_zlib
     if _importing_zlib:
         # Someone has a zlib.py[co] in their Zip file
@@ -474,7 +474,7 @@ def _get_decompress_func():
 
     _importing_zlib = True
     try:
-        from zlib import decompress
+        import zlib
     except:
         _bootstrap._verbose_message('zipimport: zlib UNAVAILABLE')
         raise ZipImportError("can't decompress data; zlib not available")
@@ -482,7 +482,7 @@ def _get_decompress_func():
         _importing_zlib = False
 
     _bootstrap._verbose_message('zipimport: zlib available')
-    return decompress
+    return zlib
 
 # Given a path to a Zip file and a toc_entry, return the (uncompressed) data.
 def _get_data(archive, toc_entry):
@@ -520,16 +520,32 @@ def _get_data(archive, toc_entry):
         if len(raw_data) != data_size:
             raise OSError("zipimport: can't read data")
 
+    try:
+        zlib = _get_zlib()
+    except:
+        zlib = None
+
     if compress == 0:
         # data is not compressed
-        return raw_data
+        data = raw_data
+    else:
+        try:
+            decompress = zlib.decompress
+        except:
+            raise ZipImportError("can't decompress data; zlib not available")
 
-    # Decompress with zlib
+        data = decompress(raw_data, -15)
+
     try:
-        decompress = _get_decompress_func()
+        crc32 = zlib.crc32
     except:
-        raise ZipImportError("can't decompress data; zlib not available")
-    return decompress(raw_data, -15)
+        pass
+    else:
+        cur_crc = zlib.crc32(data)
+        if cur_crc != crc:
+            raise ZipImportError("bad CRC")
+
+    return data
 
 
 # Lenient date/time comparison function. The precision of the mtime
